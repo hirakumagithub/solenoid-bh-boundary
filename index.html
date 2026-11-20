@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>【3D】ソレノイド内磁性体コアの境界における H と B の変化</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #334155;
+      --color-b: #f43f5e;
+      --color-h: #38bdf8;
+      --color-coil: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 1.45rem;
+      margin: 0 0 6px 0;
+    }
+    .subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      align-items: center;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      align-items: center;
+    }
+    button {
+      padding: 6px 12px;
+      font-size: 0.84rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #0f172a;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover {
+      background: #334155;
+    }
+    button.active {
+      background: #2563eb;
+      border-color: #60a5fa;
+      font-weight: 700;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .stat-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+    }
+    .stat-box .val {
+      font-size: 1.08rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    #canvas3d-wrapper {
+      position: relative;
+      width: 100%;
+      height: 500px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0b1120;
+      border: 1px solid var(--border);
+    }
+    .overlay-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 12px;
+      font-size: 0.78rem;
+      color: rgba(241, 245, 249, 0.7);
+      background: rgba(15, 23, 42, 0.7);
+      padding: 4px 10px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    .overlay-legend {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 0.78rem;
+      background: rgba(15, 23, 42, 0.75);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      pointer-events: none;
+    }
+    canvas.graph-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 8px;
+      background: #0b1120;
+      border: 1px solid var(--border);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 16px;
+    }
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 0.76rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .badge-b { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
+    .badge-h { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+    .note {
+      font-size: 0.84rem;
+      color: var(--muted);
+      margin: 10px 0 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>【3D】ソレノイド内磁性体コアの境界における磁界 H と磁束密度 B の変化</h1>
+      <p class="subtitle">
+        一様磁界 H₀ を作るソレノイド内に円柱形磁性体（比透磁率 μᵣ = 1〜100）を置いたときの、端面（法線成分）と側面（接線成分）での連続・不連続、およびコイル外側の還流磁界を3Dで可視化します。
+      </p>
+    </header>
+
+    <!-- コントロール -->
+    <section class="card">
+      <div class="controls">
+        <div class="control-group">
+          <label>
+            <span>磁性体の比透磁率 μ<sub>r</sub></span>
+            <span id="val-mur" style="color: #fbbf24;">50</span>
+          </label>
+          <input id="mur" type="range" min="1" max="100" step="1" value="50" />
+        </div>
+        <div class="control-group">
+          <label>
+            <span>コアの細長さ（長さ / 直径比）</span>
+            <span id="val-aspect">3.0</span>
+          </label>
+          <input id="aspect" type="range" min="1.5" max="6.0" step="0.1" value="3.0" />
+        </div>
+        <div class="control-group">
+          <label>
+            <span>アニメーション速度</span>
+            <span id="val-speed">1.0x</span>
+          </label>
+          <input id="speed" type="range" min="0" max="2.0" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <span style="font-size: 0.84rem; color: var(--muted);">表示モード:</span>
+        <button id="btn-both" class="active" onclick="setMode('both')">B流線 ＋ Hベクトル</button>
+        <button id="btn-b" onclick="setMode('b')">磁束密度 B のみ</button>
+        <button id="btn-h" onclick="setMode('h')">磁界 H のみ</button>
+
+        <span style="margin-left: 10px; font-size: 0.84rem; color: var(--muted);">回転:</span>
+        <button id="btn-rot-on" class="active" onclick="setAutoRotate(true)">自動回転</button>
+        <button id="btn-rot-off" onclick="setAutoRotate(false)">回転ストップ</button>
+
+        <span style="margin-left: 10px; font-size: 0.84rem; color: var(--muted);">視点:</span>
+        <button onclick="setCameraView('iso')">斜め3D</button>
+        <button onclick="setCameraView('front')">正面断面</button>
+        <button onclick="setCameraView('end')">端面方向</button>
+
+        <span style="margin-left: auto; font-size: 0.84rem; color: var(--muted);">プリセット:</span>
+        <button onclick="setPreset(10)">μᵣ = 10</button>
+        <button onclick="setPreset(50)">μᵣ = 50</button>
+        <button onclick="setPreset(100)">μᵣ = 100</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat-box">
+          <div style="color: var(--muted);">反磁界係数 N（形状依存）</div>
+          <div class="val" id="stat-n">-</div>
+        </div>
+        <div class="stat-box">
+          <div style="color: var(--muted);">実効透磁率 μ<sub>eff</sub> = B<sub>in</sub> / (μ₀H₀)</div>
+          <div class="val" style="color: var(--color-b);" id="stat-mueff">-</div>
+        </div>
+        <div class="stat-box">
+          <div style="color: var(--muted);">コア内部の磁界 H<sub>in</sub> / H₀</div>
+          <div class="val" style="color: var(--color-h);" id="stat-hin">-</div>
+        </div>
+        <div class="stat-box">
+          <div style="color: var(--muted);">端面直外の磁界 H<sub>end</sub> / H₀</div>
+          <div class="val" style="color: var(--color-h);" id="stat-hend">-</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3Dシミュレーション -->
+    <section class="card">
+      <div class="section-title">
+        <span>ソレノイド＆円柱形磁性体コア（3Dインタラクティブ表示）</span>
+      </div>
+      <div id="canvas3d-wrapper">
+        <div class="overlay-legend">
+          <div><span style="color:#f43f5e;">●</span> 赤線・粒子：磁束密度 B（閉ループ）</div>
+          <div><span style="color:#38bdf8;">➔</span> 青矢印：磁界 H</div>
+          <div><span style="color:#f59e0b;">●</span> 銅コイル：ソレノイド</div>
+          <div><span style="color:#c084fc;">◯</span> 紫縁：S極（−） ／ <span style="color:#f8fafc;">◯</span> 白縁：N極（＋）</div>
+          <div><span style="color:#fde047;">--</span> 黄線：①軸方向 ／ <span style="color:#6ee7b7;">--</span> 緑線：②径方向</div>
+        </div>
+        <div class="overlay-hint">左ドラッグ：回転 ／ ホイール：ズーム ／ 右ドラッグ：平行移動</div>
+      </div>
+    </section>
+
+    <!-- 境界プロファイルグラフ -->
+    <div class="grid-2">
+      <section class="card">
+        <div class="section-title">
+          <span>① 中心軸上（端面を横断：法線成分）</span>
+          <span>
+            <span class="badge badge-b">Bₙ 連続</span>
+            <span class="badge badge-h">Hₙ 不連続</span>
+          </span>
+        </div>
+        <canvas id="graphAxial" class="graph-canvas" width="510" height="250"></canvas>
+        <p class="note">
+          端面では <strong>Bₙ が連続</strong> につながる一方、<strong>Hₙ は 1/μᵣ 倍に急落</strong>（不連続）します。これはコア端面に現れる磁極（磁荷）が内部に逆向きの<strong>反磁界</strong>を作るためです。
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <span>② 中央断面（側面を横断：接線成分）</span>
+          <span>
+            <span class="badge badge-h">Hₜ 連続</span>
+            <span class="badge badge-b">Bₜ 不連続</span>
+          </span>
+        </div>
+        <canvas id="graphRadial" class="graph-canvas" width="510" height="250"></canvas>
+        <p class="note">
+          側面では <strong>Hₜ が連続</strong> につながる一方、<strong>Bₜ は μᵣ 倍に跳ね上がる</strong>（不連続）ため、磁束の大部分が磁性体コアの内部に集中します。
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const elMur = document.getElementById("mur");
+    const elAspect = document.getElementById("aspect");
+    const elSpeed = document.getElementById("speed");
+
+    let displayMode = "both";
+    let animPhase = 0;
+
+    // 回転楕円体近似による反磁界係数 N
+    function calcDemagFactor(aspect) {
+      const m = aspect;
+      if (m <= 1.01) return 1 / 3;
+      const e = Math.sqrt(1 - 1 / (m * m));
+      return ((1 - e * e) / (e * e * e)) * (0.5 * Math.log((1 + e) / (1 - e)) - e);
+    }
+
+    function getPhysics() {
+      const mur = parseFloat(elMur.value);
+      const aspect = parseFloat(elAspect.value);
+      const N = calcDemagFactor(aspect);
+      const mueff = mur / (1 + N * (mur - 1));
+      const Hin = 1 / (1 + N * (mur - 1));
+      const Bin = mueff;
+      return { mur, aspect, N, mueff, Hin, Bin };
+    }
+
+    // ==========================================
+    // Three.js 3Dシーンの構築
+    // ==========================================
+    const wrapper = document.getElementById("canvas3d-wrapper");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+
+    const camera = new THREE.PerspectiveCamera(42, wrapper.clientWidth / wrapper.clientHeight, 0.1, 150);
+    camera.position.set(8.5, 5.5, 13.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    wrapper.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.1;
+
+    // ライティング
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight1.position.set(8, 12, 10);
+    scene.add(dirLight1);
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
+    dirLight2.position.set(-8, -6, -8);
+    scene.add(dirLight2);
+
+    // グループ定義
+    const coilGroup = new THREE.Group();
+    const coreGroup = new THREE.Group();
+    const bFieldGroup = new THREE.Group();
+    const hFieldGroup = new THREE.Group();
+    const guideGroup = new THREE.Group();
+    scene.add(coilGroup, coreGroup, bFieldGroup, hFieldGroup, guideGroup);
+
+    // 定数寸法（3D空間単位）
+    const CORE_RADIUS = 0.85;
+    const COIL_RADIUS = 2.1;
+    const COIL_LENGTH = 10.5;
+    const COIL_HALF_LEN = COIL_LENGTH * 0.5;
+    const FIELD_HALF_LEN = 8.2;
+
+    // 1. ソレノイドコイル（らせん状チューブ）
+    function buildSolenoid() {
+      const turns = 16;
+      const pts = [];
+      const steps = turns * 24;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = -COIL_LENGTH / 2 + t * COIL_LENGTH;
+        const angle = t * turns * Math.PI * 2;
+        const y = COIL_RADIUS * Math.cos(angle);
+        const z = COIL_RADIUS * Math.sin(angle);
+        pts.push(new THREE.Vector3(x, y, z));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const tubeGeo = new THREE.TubeGeometry(curve, steps, 0.075, 8, false);
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        metalness: 0.7,
+        roughness: 0.3,
+        transparent: true,
+        opacity: 0.72
+      });
+      coilGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+    }
+
+    // 2. 観測ライン（① 中心軸、② 中央径方向）
+    function buildGuides() {
+      const axialGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-FIELD_HALF_LEN, 0, 0),
+        new THREE.Vector3(FIELD_HALF_LEN, 0, 0)
+      ]);
+      const axialMat = new THREE.LineDashedMaterial({ color: 0xfde047, dashSize: 0.3, gapSize: 0.18, opacity: 0.7, transparent: true });
+      const axialLine = new THREE.Line(axialGeo, axialMat);
+      axialLine.computeLineDistances();
+      guideGroup.add(axialLine);
+
+      const radGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -COIL_RADIUS - 1.2, 0),
+        new THREE.Vector3(0, COIL_RADIUS + 1.2, 0)
+      ]);
+      const radMat = new THREE.LineDashedMaterial({ color: 0x6ee7b7, dashSize: 0.25, gapSize: 0.15, opacity: 0.7, transparent: true });
+      const radLine = new THREE.Line(radGeo, radMat);
+      radLine.computeLineDistances();
+      guideGroup.add(radLine);
+    }
+
+    // 3. 円柱形磁性体コアの更新
+    let coreMesh, sRing, nRing;
+    function updateCore(p) {
+      while (coreGroup.children.length > 0) {
+        const obj = coreGroup.children[0];
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        coreGroup.remove(obj);
+      }
+
+      const coreLen = Math.min(8.6, CORE_RADIUS * 2 * p.aspect);
+      const geo = new THREE.CylinderGeometry(CORE_RADIUS, CORE_RADIUS, coreLen, 40, 1, false);
+      geo.rotateZ(Math.PI / 2);
+
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0x64748b,
+        metalness: 0.35,
+        roughness: 0.25,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false
+      });
+      coreMesh = new THREE.Mesh(geo, mat);
+      coreGroup.add(coreMesh);
+
+      const edges = new THREE.EdgesGeometry(geo, 25);
+      const edgeLine = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xcbd5e1, opacity: 0.6, transparent: true }));
+      coreGroup.add(edgeLine);
+
+      if (p.mur > 1.5) {
+        const ringGeo = new THREE.TorusGeometry(CORE_RADIUS, 0.035, 10, 40);
+        ringGeo.rotateY(Math.PI / 2);
+
+        sRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xc084fc }));
+        sRing.position.x = -coreLen / 2;
+        coreGroup.add(sRing);
+
+        nRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xf8fafc }));
+        nRing.position.x = coreLen / 2;
+        coreGroup.add(nRing);
+      }
+      return coreLen;
+    }
+
+    // 4. 磁束密度 B の3D流線（コイル外側を大きな円弧で回り込む閉ループ）
+    let bStreamlines = [];
+    let bParticlesMesh = null;
+    const PARTICLES_PER_LINE = 6;
+
+    function updateBField(p, coreLen) {
+      while (bFieldGroup.children.length > 0) {
+        const obj = bFieldGroup.children[0];
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        bFieldGroup.remove(obj);
+      }
+      bStreamlines = [];
+
+      const pullFactor = Math.min(0.86, (p.mueff - 1) / (p.mueff + 1.5));
+      const halfCore = coreLen / 2;
+
+      // 内側リングはより大きな外側円弧を描き、外側リングはコイル寄りの円弧を描く
+      const rings = [
+        { rFar: COIL_RADIUS * 0.48, rTarget: CORE_RADIUS * 0.44, rReturn: COIL_RADIUS + 2.85, xTurn: COIL_HALF_LEN + 2.85, count: 6 },
+        { rFar: COIL_RADIUS * 0.84, rTarget: CORE_RADIUS * 0.80, rReturn: COIL_RADIUS + 1.55, xTurn: COIL_HALF_LEN + 1.75, count: 8 }
+      ];
+
+      const tubeRadius = 0.025;
+      const tubeMat = new THREE.MeshBasicMaterial({
+        color: 0xf43f5e,
+        transparent: true,
+        opacity: 0.62
+      });
+
+      const innerSteps = 34;
+      const outerSteps = 36;
+
+      rings.forEach((ring, rIdx) => {
+        for (let k = 0; k < ring.count; k++) {
+          const theta = (k / ring.count) * Math.PI * 2 + rIdx * 0.35;
+          const cosT = Math.cos(theta);
+          const sinT = Math.sin(theta);
+          const ctrlPts = [];
+
+          // (1) コイル内部：左端 (-COIL_HALF_LEN) → 右端 (+COIL_HALF_LEN)
+          for (let s = 0; s <= innerSteps; s++) {
+            const x = -COIL_HALF_LEN + (COIL_LENGTH * s) / innerSteps;
+            const dxLeft = (x - (-halfCore)) / 0.95;
+            const dxRight = (halfCore - x) / 0.95;
+            const insideWeight = 0.5 * (Math.tanh(dxLeft) + Math.tanh(dxRight));
+            const r = ring.rFar * (1 - pullFactor * insideWeight) + ring.rTarget * (pullFactor * insideWeight);
+            ctrlPts.push(new THREE.Vector3(x, r * cosT, r * sinT));
+          }
+
+          // (2) コイル外側：右端から大きな円弧を描いて左端へ戻る
+          // 半楕円状の滑らかな回り込み経路
+          const rStart = ring.rFar;
+          const rMid = (rStart + ring.rReturn) * 0.5;
+          const rAmp = (ring.rReturn - rStart) * 0.5;
+
+          for (let s = 1; s < outerSteps; s++) {
+            const u = s / outerSteps; // 0..1
+            const phi = u * Math.PI;  // 0 (右端) → π/2 (中央外側) → π (左端)
+            // 右端で少し外へ膨らみつつ大きく回り込む
+            const x = COIL_HALF_LEN * Math.cos(phi) + (ring.xTurn - COIL_HALF_LEN) * Math.sin(2 * phi) * 0.55;
+            const r = rStart + (ring.rReturn - rStart) * Math.pow(Math.sin(phi), 0.72);
+            ctrlPts.push(new THREE.Vector3(x, r * cosT, r * sinT));
+          }
+
+          // 閉ループ曲線として生成
+          const curve = new THREE.CatmullRomCurve3(ctrlPts, true, "catmullrom", 0.5);
+          const sampledPts = curve.getPoints(96);
+          bStreamlines.push(sampledPts);
+
+          const tubeGeo = new THREE.TubeGeometry(curve, 96, tubeRadius, 6, true);
+          bFieldGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+        }
+      });
+
+      // 中心軸上の1本（無限遠で閉じる貫通線として表現）
+      const centerPts = [];
+      for (let s = 0; s <= 40; s++) {
+        const x = -FIELD_HALF_LEN + (FIELD_HALF_LEN * 2 * s) / 40;
+        centerPts.push(new THREE.Vector3(x, 0, 0));
+      }
+      bStreamlines.push(centerPts);
+      const centerCurve = new THREE.CatmullRomCurve3(centerPts);
+      bFieldGroup.add(new THREE.Mesh(new THREE.TubeGeometry(centerCurve, 40, tubeRadius, 6, false), tubeMat));
+
+      // 粒子生成
+      const totalParticles = bStreamlines.length * PARTICLES_PER_LINE;
+      const positions = new Float32Array(totalParticles * 3);
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const pMat = new THREE.PointsMaterial({
+        color: 0xffcdd2,
+        size: 0.20,
+        transparent: true,
+        opacity: 0.96
+      });
+      bParticlesMesh = new THREE.Points(pGeo, pMat);
+      bFieldGroup.add(bParticlesMesh);
+    }
+
+    function animateBParticles() {
+      if (!bParticlesMesh || bStreamlines.length === 0) return;
+      const pos = bParticlesMesh.geometry.attributes.position.array;
+      let idx = 0;
+      for (let i = 0; i < bStreamlines.length; i++) {
+        const pts = bStreamlines[i];
+        const maxS = pts.length - 1;
+        for (let k = 0; k < PARTICLES_PER_LINE; k++) {
+          const t = (animPhase + k / PARTICLES_PER_LINE + (i % 3) * 0.09) % 1;
+          const fIdx = t * maxS;
+          const i0 = Math.floor(fIdx);
+          const i1 = Math.min(maxS, i0 + 1);
+          const frac = fIdx - i0;
+          const p0 = pts[i0];
+          const p1 = pts[i1];
+          pos[idx++] = p0.x + (p1.x - p0.x) * frac;
+          pos[idx++] = p0.y + (p1.y - p0.y) * frac;
+          pos[idx++] = p0.z + (p1.z - p0.z) * frac;
+        }
+      }
+      bParticlesMesh.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // 5. 磁界 H の3Dベクトル場（コイル内部＋コイル外側の還流磁界）
+    function updateHField(p, coreLen) {
+      while (hFieldGroup.children.length > 0) {
+        hFieldGroup.remove(hFieldGroup.children[0]);
+      }
+
+      const halfCore = coreLen / 2;
+      const xCount = 21;
+      // コア内部・コイル内部に加えて、コイル外側（±2.85, ±3.9）にも還流ベクトルを配置
+      const radialOffsets = [-3.9, -2.85, -1.65, -1.02, -0.45, 0, 0.45, 1.02, 1.65, 2.85, 3.9];
+
+      const planes = ["xy", "xz"];
+      planes.forEach((plane) => {
+        for (let ix = 0; ix < xCount; ix++) {
+          const x = -7.2 + (14.4 * ix) / (xCount - 1);
+          for (let ir = 0; ir < radialOffsets.length; ir++) {
+            const rVal = radialOffsets[ir];
+            if (plane === "xz" && rVal === 0) continue;
+
+            const y = plane === "xy" ? rVal : 0;
+            const z = plane === "xz" ? rVal : 0;
+            const rAbs = Math.abs(rVal);
+
+            const inCoreX = Math.abs(x) < halfCore;
+            const inCoreR = rAbs < CORE_RADIUS;
+            const inCoilX = Math.abs(x) <= COIL_HALF_LEN;
+            const inCoilR = rAbs < COIL_RADIUS;
+
+            let hx = 1.0;
+            let hr = 0.0;
+
+            if (inCoreX && inCoreR) {
+              // コア内部：反磁界で極小
+              hx = p.Hin;
+              hr = 0;
+            } else if (inCoilX && inCoilR) {
+              // コイル内部（コア外部）
+              if (!inCoreX && rAbs < CORE_RADIUS * 1.25) {
+                const distCore = Math.abs(x) - halfCore;
+                const endBoost = Math.exp(-distCore / 1.1);
+                hx = 1.0 + (p.Bin - 1.0) * endBoost;
+                const signX = x < 0 ? -1 : 1;
+                hr = signX * (rVal / CORE_RADIUS) * (p.Bin - 1.0) * endBoost * 0.14;
+              } else if (inCoreX) {
+                const distR = rAbs - CORE_RADIUS;
+                const decay = Math.exp(-distR / 0.75);
+                hx = 1.0 * (1 - decay) + p.Hin * decay;
+              }
+            } else {
+              // コイル外部（軸方向外側 or 径方向外側）：
+              // 2つの磁極（±COIL_HALF_LEN）が作る双極子的な還流磁界を計算
+              const poleX = COIL_HALF_LEN * 0.92;
+              const eps = 1.25;
+              // 右極(+poleX: 湧き出し) と 左極(-poleX: 吸い込み)
+              const dxP = x - poleX;
+              const dxM = x + poleX;
+              const dP3 = Math.pow(dxP * dxP + rAbs * rAbs + eps * eps, 1.5);
+              const dM3 = Math.pow(dxM * dxM + rAbs * rAbs + eps * eps, 1.5);
+
+              const strength = 22.0 * (0.45 + 0.12 * Math.log1p(p.mueff));
+              hx = strength * (dxP / dP3 - dxM / dM3);
+              hr = strength * (rVal / dP3 - rVal / dM3);
+            }
+
+            const hy = plane === "xy" ? hr : 0;
+            const hz = plane === "xz" ? hr : 0;
+            const dir = new THREE.Vector3(hx, hy, hz);
+            const mag = dir.length();
+            if (mag < 1e-4) continue;
+            dir.normalize();
+
+            const isOutsideCoil = !(inCoilX && inCoilR);
+            const visualLen = isOutsideCoil
+              ? Math.min(0.62, 0.24 + 0.22 * Math.log1p(mag * 1.2))
+              : Math.min(0.56, 0.10 + 0.19 * Math.log1p(mag * 1.4));
+
+            const color = (inCoreX && inCoreR) ? 0x0284c7 : (isOutsideCoil ? 0x7dd3fc : 0x38bdf8);
+            const origin = new THREE.Vector3(
+              x - dir.x * visualLen * 0.5,
+              y - dir.y * visualLen * 0.5,
+              z - dir.z * visualLen * 0.5
+            );
+            const arrow = new THREE.ArrowHelper(dir, origin, visualLen, color, visualLen * 0.36, visualLen * 0.22);
+            hFieldGroup.add(arrow);
+          }
+        }
+      });
+    }
+
+    function setMode(mode) {
+      displayMode = mode;
+      ["both", "b", "h"].forEach((m) => {
+        document.getElementById("btn-" + m).classList.toggle("active", m === mode);
+      });
+      bFieldGroup.visible = (mode === "both" || mode === "b");
+      hFieldGroup.visible = (mode === "both" || mode === "h");
+    }
+
+    function setAutoRotate(enabled) {
+      controls.autoRotate = enabled;
+      document.getElementById("btn-rot-on").classList.toggle("active", enabled);
+      document.getElementById("btn-rot-off").classList.toggle("active", !enabled);
+    }
+
+    function setCameraView(view) {
+      if (view === "iso") {
+        camera.position.set(8.5, 5.5, 13.5);
+      } else if (view === "front") {
+        camera.position.set(0, 0, 16.5);
+      } else if (view === "end") {
+        camera.position.set(14.0, 2.8, 2.8);
+      }
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+
+    function setPreset(val) {
+      elMur.value = val;
+      updateParams();
+    }
+
+    // ==========================================
+    // 2D境界プロファイルグラフ描画
+    // ==========================================
+    function drawAxialGraph(p) {
+      const canvas = document.getElementById("graphAxial");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const padL = 48, padR = 20, padT = 26, padB = 34;
+      const pw = W - padL - padR, ph = H - padT - padB;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const xCore1 = padL + pw * 0.28;
+      const xCore2 = padL + pw * 0.72;
+      const maxY = Math.max(2.0, p.Bin * 1.18);
+      const yOf = (v) => padT + ph * (1 - v / maxY);
+
+      ctx.fillStyle = "rgba(100, 116, 139, 0.22)";
+      ctx.fillRect(xCore1, padT, xCore2 - xCore1, ph);
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, yOf(1.0));
+      ctx.lineTo(W - padR, yOf(1.0));
+      ctx.stroke();
+
+      ctx.strokeStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.moveTo(xCore1, padT); ctx.lineTo(xCore1, H - padB);
+      ctx.moveTo(xCore2, padT); ctx.lineTo(xCore2, H - padB);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "#64748b";
+      ctx.beginPath();
+      ctx.moveTo(padL, padT);
+      ctx.lineTo(padL, H - padB);
+      ctx.lineTo(W - padR, H - padB);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#f43f5e";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      const Npts = 160;
+      for (let i = 0; i <= Npts; i++) {
+        const x = padL + (pw * i) / Npts;
+        let val;
+        if (x >= xCore1 && x <= xCore2) {
+          val = p.Bin;
+        } else {
+          const dist = x < xCore1 ? (xCore1 - x) / (pw * 0.14) : (x - xCore2) / (pw * 0.14);
+          val = 1.0 + (p.Bin - 1.0) * Math.exp(-dist * 1.4);
+        }
+        if (i === 0) ctx.moveTo(x, yOf(val));
+        else ctx.lineTo(x, yOf(val));
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      for (let i = 0; i <= Npts; i++) {
+        const x = padL + (pw * i) / Npts;
+        let val;
+        if (x > xCore1 && x < xCore2) {
+          val = p.Hin;
+        } else {
+          const dist = x <= xCore1 ? (xCore1 - x) / (pw * 0.14) : (x - xCore2) / (pw * 0.14);
+          val = 1.0 + (p.Bin - 1.0) * Math.exp(-dist * 1.4);
+        }
+        if (i === 0) ctx.moveTo(x, yOf(val));
+        else ctx.lineTo(x, yOf(val));
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("0", padL - 14, H - padB + 4);
+      ctx.fillText("1.0", padL - 26, yOf(1.0) + 4);
+      ctx.fillText(maxY.toFixed(1), padL - 30, padT + 6);
+      ctx.fillText("空気", padL + 22, H - 12);
+      ctx.fillText("磁性体コア内部", (xCore1 + xCore2) / 2 - 40, H - 12);
+      ctx.fillText("空気", xCore2 + 28, H - 12);
+
+      ctx.fillStyle = "#f43f5e";
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText(`Bₙ/(μ₀H₀) = ${p.Bin.toFixed(2)} (連続)`, padL + 8, padT + 14);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillText(`Hₙ/H₀: 内部 ${p.Hin.toFixed(3)} ⇔ 端面外 ${p.Bin.toFixed(2)}`, padL + 200, padT + 14);
+    }
+
+    function drawRadialGraph(p) {
+      const canvas = document.getElementById("graphRadial");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const padL = 48, padR = 20, padT = 26, padB = 34;
+      const pw = W - padL - padR, ph = H - padT - padB;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const xCore1 = padL + pw * 0.32;
+      const xCore2 = padL + pw * 0.68;
+      const maxY = Math.max(2.0, p.Bin * 1.18);
+      const yOf = (v) => padT + ph * (1 - v / maxY);
+
+      ctx.fillStyle = "rgba(100, 116, 139, 0.22)";
+      ctx.fillRect(xCore1, padT, xCore2 - xCore1, ph);
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, yOf(1.0));
+      ctx.lineTo(W - padR, yOf(1.0));
+      ctx.stroke();
+
+      ctx.strokeStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.moveTo(xCore1, padT); ctx.lineTo(xCore1, H - padB);
+      ctx.moveTo(xCore2, padT); ctx.lineTo(xCore2, H - padB);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "#64748b";
+      ctx.beginPath();
+      ctx.moveTo(padL, padT);
+      ctx.lineTo(padL, H - padB);
+      ctx.lineTo(W - padR, H - padB);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#f43f5e";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      const Npts = 160;
+      for (let i = 0; i <= Npts; i++) {
+        const x = padL + (pw * i) / Npts;
+        let val;
+        if (x > xCore1 && x < xCore2) {
+          val = p.Bin;
+        } else {
+          const dist = x <= xCore1 ? (xCore1 - x) / (pw * 0.16) : (x - xCore2) / (pw * 0.16);
+          val = p.Hin + (1.0 - p.Hin) * (1 - Math.exp(-dist * 1.6));
+        }
+        if (i === 0) ctx.moveTo(x, yOf(val));
+        else ctx.lineTo(x, yOf(val));
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      for (let i = 0; i <= Npts; i++) {
+        const x = padL + (pw * i) / Npts;
+        let val;
+        if (x >= xCore1 && x <= xCore2) {
+          val = p.Hin;
+        } else {
+          const dist = x < xCore1 ? (xCore1 - x) / (pw * 0.16) : (x - xCore2) / (pw * 0.16);
+          val = p.Hin + (1.0 - p.Hin) * (1 - Math.exp(-dist * 1.6));
+        }
+        if (i === 0) ctx.moveTo(x, yOf(val));
+        else ctx.lineTo(x, yOf(val));
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("0", padL - 14, H - padB + 4);
+      ctx.fillText("1.0", padL - 26, yOf(1.0) + 4);
+      ctx.fillText(maxY.toFixed(1), padL - 30, padT + 6);
+      ctx.fillText("空気(外側)", padL + 16, H - 12);
+      ctx.fillText("磁性体コア", (xCore1 + xCore2) / 2 - 28, H - 12);
+      ctx.fillText("空気(外側)", xCore2 + 24, H - 12);
+
+      ctx.fillStyle = "#f43f5e";
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText(`Bₜ/(μ₀H₀): 内部 ${p.Bin.toFixed(2)} ⇔ 側面外 ${p.Hin.toFixed(3)}`, padL + 8, padT + 14);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillText(`Hₜ/H₀ = ${p.Hin.toFixed(3)} (連続)`, padL + 285, padT + 14);
+    }
+
+    function updateParams() {
+      const p = getPhysics();
+      document.getElementById("val-mur").textContent = p.mur.toFixed(0);
+      document.getElementById("val-aspect").textContent = p.aspect.toFixed(1);
+      document.getElementById("val-speed").textContent = parseFloat(elSpeed.value).toFixed(1) + "x";
+
+      document.getElementById("stat-n").textContent = p.N.toFixed(3);
+      document.getElementById("stat-mueff").textContent = p.mueff.toFixed(2) + " 倍";
+      document.getElementById("stat-hin").textContent = p.Hin.toFixed(3);
+      document.getElementById("stat-hend").textContent = p.Bin.toFixed(2) + " 倍";
+
+      const coreLen = updateCore(p);
+      updateBField(p, coreLen);
+      updateHField(p, coreLen);
+      drawAxialGraph(p);
+      drawRadialGraph(p);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const speed = parseFloat(elSpeed.value);
+      animPhase = (animPhase + 0.0035 * speed) % 1;
+      animateBParticles();
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener("resize", () => {
+      camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+    });
+
+    buildSolenoid();
+    buildGuides();
+    [elMur, elAspect, elSpeed].forEach((el) => el.addEventListener("input", updateParams));
+    updateParams();
+    animate();
+  </script>
+</body>
+</html>
